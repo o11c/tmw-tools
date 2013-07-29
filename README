@@ -1,0 +1,8 @@
+This repository contains all of the tools used by TMW data.
+
+It was originally created by filtering the tools from the history of
+the server and client data repositories, and then merging them (this repo
+has two root commits).
+
+It is a direct submodule of server data, and client data contains a symlink
+that will point to the right place if it is itself a submodule.
