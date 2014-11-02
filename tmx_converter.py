@@ -48,6 +48,8 @@ other_spawn_fields = (
 )
 other_warp_fields = (
 )
+other_anchor_fields = (
+)
 
 TILESIZE = 32
 SEPARATOR = '|'
@@ -59,7 +61,9 @@ TMWA_MAP_CONF = 'conf/tmwa-map.conf'
 NPC_MOBS = '_mobs.txt'
 NPC_WARPS = '_warps.txt'
 NPC_IMPORTS = '_import.txt'
+NPC_ANCHORS = '_anchors.conf'
 NPC_MASTER_IMPORTS = NPC_IMPORTS
+NPC_MASTER_ANCHORS = 'anchors.conf'
 
 class State(object):
     pass
@@ -96,6 +100,10 @@ class Warp(Object):
         'dest_tile_y',
     ) + other_warp_fields
 
+class Anchor(Object):
+    __slots__ = (
+    ) + other_anchor_fields
+
 class ContentHandler(xml.sax.ContentHandler):
     __slots__ = (
         'locator',  # keeps track of location in document
@@ -112,11 +120,12 @@ class ContentHandler(xml.sax.ContentHandler):
         'mobs',     # open file to _mobs.txt
         'warps',    # open file to _warps.txt
         'imports',  # open file to _import.txt
+        'anchors',  # open file to anchors.conf
         'name',     # name property of the current map
         'object',   # stores properties of the latest <object> tag
         'mob_ids',  # set of all mob types that spawn here
     )
-    def __init__(self, out, npc_dir, mobs, warps, imports):
+    def __init__(self, out, npc_dir, mobs, warps, imports, anchors):
         xml.sax.ContentHandler.__init__(self)
         self.locator = None
         self.out = open(out, 'w')
@@ -132,6 +141,7 @@ class ContentHandler(xml.sax.ContentHandler):
         self.mobs = mobs
         self.warps = warps
         self.imports = imports
+        self.anchors = anchors
         self.object = None
         self.mob_ids = set()
 
@@ -209,6 +219,8 @@ class ContentHandler(xml.sax.ContentHandler):
                     y += h/2
                     w -= 2
                     h -= 2
+                elif obj_type == 'anchor':
+                    self.object = Anchor()
                 else:
                     if obj_type not in other_object_types:
                         print('Unknown object type:', obj_type, file=sys.stderr)
@@ -284,6 +296,12 @@ class ContentHandler(xml.sax.ContentHandler):
                         '%d,%d,%s.gat,%d,%d\n' % (obj.w, obj.h, obj.dest_map, obj.dest_tile_x, obj.dest_tile_y),
                     ])
                 )
+            elif isinstance(obj, Anchor):
+                self.anchors.write(
+                    '    anchor "%s", area(loc("%s.gat",%d,%d), %d,%d);' % (obj.name, self.base, obj.x, obj.y, obj.w, obj.h)
+                )
+            elif obj is not None:
+                assert False, 'Unknown subclass: %s' % obj
 
         if name == u'data':
             if self.state is State.DATA:
@@ -341,6 +359,7 @@ def main(argv):
                             mob_names[int(k)] = v.strip()
 
     npc_master = []
+    anchor_master = []
     map_basenames = []
 
     for arg in os.listdir(tmx_dir):
@@ -353,11 +372,15 @@ def main(argv):
             this_map_npc_dir = posixpath.join(npc_dir, base)
             os.path.isdir(this_map_npc_dir) or os.mkdir(this_map_npc_dir)
             print('Converting %s to %s' % (tmx, wlk))
-            with open(posixpath.join(this_map_npc_dir, NPC_MOBS), 'w') as mobs:
-                with open(posixpath.join(this_map_npc_dir, NPC_WARPS), 'w') as warps:
-                    with open(posixpath.join(this_map_npc_dir, NPC_IMPORTS), 'w') as imports:
-                        xml.sax.parse(tmx, ContentHandler(wlk, this_map_npc_dir, mobs, warps, imports))
+            with open(posixpath.join(this_map_npc_dir, NPC_MOBS), 'w') as mobs, \
+                open(posixpath.join(this_map_npc_dir, NPC_WARPS), 'w') as warps, \
+                open(posixpath.join(this_map_npc_dir, NPC_IMPORTS), 'w') as imports, \
+                open(posixpath.join(this_map_npc_dir, NPC_ANCHORS), 'w') as anchors:
+                    anchors.write('{\n')
+                    xml.sax.parse(tmx, ContentHandler(wlk, this_map_npc_dir, mobs, warps, imports, anchors))
+                    anchors.write('}\n')
             npc_master.append('import: %s\n' % posixpath.join(SERVER_NPCS, base, NPC_IMPORTS))
+            anchor_master.append('import: %s\n' % posixpath.join(SERVER_NPCS, base, NPC_ANCHORS))
 
     with open(posixpath.join(wlk_dir, 'resnametable.txt'), 'w') as resname:
         for base in sorted(map_basenames):
@@ -365,8 +388,11 @@ def main(argv):
     with open(posixpath.join(npc_dir, NPC_MASTER_IMPORTS), 'w') as out:
         out.write('// %s\n\n' % MESSAGE)
         npc_master.sort()
-        for line in npc_master:
-            out.write(line)
+        out.writelines(npc_master)
+    with open(posixpath.join(npc_dir, NPC_MASTER_ANCHORS), 'w') as out:
+        out.write('// %s\n\n' % MESSAGE)
+        anchor_master.sort()
+        out.writelines(anchor_master)
 
 if __name__ == '__main__':
     main(sys.argv)
