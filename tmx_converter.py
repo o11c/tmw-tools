@@ -62,6 +62,14 @@ NPC_WARPS = '_warps.txt'
 NPC_IMPORTS = '_import.txt'
 NPC_MASTER_IMPORTS = NPC_IMPORTS
 
+def pixel(pix, name):
+    if '.' in pix:
+        raise ValueError('grid error: %s -> %s in %s' % (pix, '???', name))
+    i = int(pix)
+    if i % TILESIZE:
+        raise ValueError('grid error: %s -> %s in %s' % (i, i - i % TILESIZE, name))
+    return i / TILESIZE
+
 class State(object):
     pass
 State.INITIAL = State()
@@ -187,10 +195,10 @@ class ContentHandler(xml.sax.ContentHandler):
         elif self.state is State.FINAL:
             if name == u'object':
                 obj_type = attr[u'type'].lower()
-                x = int(attr[u'x']) / TILESIZE;
-                y = int(attr[u'y']) / TILESIZE;
-                w = int(attr.get(u'width', 0)) / TILESIZE;
-                h = int(attr.get(u'height', 0)) / TILESIZE;
+                x = pixel(attr[u'x'], '%s object "%s".x' % (attr[u'type'], attr[u'name']))
+                y = pixel(attr[u'y'], '%s object "%s".y' % (attr[u'type'], attr[u'name']))
+                w = pixel(attr.get(u'width', '0'), '%s object "%s".width' % (attr[u'type'], attr[u'name']))
+                h = pixel(attr.get(u'height', 0), '%s object "%s".height' % (attr[u'type'], attr[u'name']))
                 # I'm not sure exactly what the w/h shrinking is for,
                 # I just copied it out of the old converter.
                 # I know that the x += w/2 is to get centers, though.
